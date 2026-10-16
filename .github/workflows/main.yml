@@ -1,0 +1,49 @@
+name: Build DiscordBridge
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      # Retries because PaperMC's repo sometimes returns temporary 502 errors
+      - name: Build with Maven
+        run: |
+          for i in 1 2 3; do
+            mvn -B -ntp clean package && exit 0
+            echo "Build attempt $i failed, retrying in 20s..."
+            sleep 20
+          done
+          exit 1
+
+      - name: Upload jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: DiscordBridge
+          path: target/DiscordBridge-*.jar
+          if-no-files-found: error
+
+      # Pushing a tag like v1.1.0 also publishes a GitHub Release with the jar
+      - name: Create release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: target/DiscordBridge-*.jar
